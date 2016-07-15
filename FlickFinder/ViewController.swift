@@ -48,7 +48,6 @@ class ViewController: UIViewController {
     // MARK: Search Actions
     
     @IBAction func searchByPhrase(sender: AnyObject) {
-        print("text area triggered")
         userDidTapView(self)
         setUIEnabled(false)
         
@@ -58,12 +57,13 @@ class ViewController: UIViewController {
             var methodParameters: [String: String!] = [:]
             
             methodParameters = [
-                "safe_search": Constants.FlickrParameterValues.UseSafeSearch,
-                "text": phraseTextField.text,
-                "extras": Constants.FlickrParameterValues.MediumURL,
-                "method": Constants.FlickrParameterValues.SearchMethod,
-                "format": Constants.FlickrParameterValues.SearchMethod,
-                "nojsoncallback": Constants.FlickrParameterValues.DisableJSONCallback
+                Constants.FlickrParameterKeys.Method: Constants.FlickrParameterValues.SearchMethod,
+                Constants.FlickrParameterKeys.APIKey: Constants.FlickrParameterValues.APIKey,
+                Constants.FlickrParameterKeys.Text: phraseTextField.text,
+                Constants.FlickrParameterKeys.SafeSearch: Constants.FlickrParameterValues.UseSafeSearch,
+                Constants.FlickrParameterKeys.Extras: Constants.FlickrParameterValues.MediumURL,
+                Constants.FlickrParameterKeys.Format: Constants.FlickrParameterValues.ResponseFormat,
+                Constants.FlickrParameterKeys.NoJSONCallback: Constants.FlickrParameterValues.DisableJSONCallback
             ]
             
             displayImageFromFlickrBySearch(methodParameters)
@@ -80,12 +80,20 @@ class ViewController: UIViewController {
         
         if isTextFieldValid(latitudeTextField, forRange: Constants.Flickr.SearchLatRange) && isTextFieldValid(longitudeTextField, forRange: Constants.Flickr.SearchLonRange) {
             photoTitleLabel.text = "Searching..."
-            // TODO: Set necessary parameters!
+
+            var methodParameters: [String: String!] = [:]
+            
+            methodParameters = [
+                "safe_search": Constants.FlickrParameterValues.UseSafeSearch,
+                "extras": Constants.FlickrParameterValues.MediumURL,
+                "api_key": Constants.FlickrParameterValues.APIKey,
+                "method": Constants.FlickrParameterValues.SearchMethod,
+                "format": Constants.FlickrParameterValues.SearchMethod,
+                "nojsoncallback": Constants.FlickrParameterValues.DisableJSONCallback,
+                "bbox": bboxString()
+            ]
             
             
-            
-            
-            let methodParameters: [String: String!] = [:]
             displayImageFromFlickrBySearch(methodParameters)
         }
         else {
@@ -94,16 +102,107 @@ class ViewController: UIViewController {
         }
     }
     
+    private func bboxString () -> String {
+
+//        give the lat and long a box
+        
+        if let latitude = Double(latitudeTextField.text!), let longitude = Double(longitudeTextField.text!) {
+            
+            let minimumLon = max(longitude - Constants.Flickr.SearchBBoxHalfWidth, Constants.Flickr.SearchLonRange.0)
+            let minimumLat = max(latitude - Constants.Flickr.SearchBBoxHalfHeight, Constants.Flickr.SearchLatRange.0)
+            let maximumLon = min(longitude + Constants.Flickr.SearchBBoxHalfWidth, Constants.Flickr.SearchLonRange.1)
+            let maximumLat = min(latitude + Constants.Flickr.SearchBBoxHalfHeight, Constants.Flickr.SearchLatRange.1)
+            
+            return "\(minimumLon),\(minimumLat),\(maximumLon),\(maximumLat)"
+            
+        } else {
+            return "0,0,0,0"
+        }
+        
+    }
+    
     // MARK: Flickr API
     
     private func displayImageFromFlickrBySearch(methodParameters: [String:AnyObject]) {
         
         print(flickrURLFromParameters(methodParameters))
         
-        // TODO: Make request to Flickr!
+        let session = NSURLSession.sharedSession()
+        let request = NSURLRequest(URL: flickrURLFromParameters(methodParameters))
+        
+        let task = session.dataTaskWithRequest(request) { (data, response, error) in
+            
+            func displayError(error: String) {
+                print(error)
+                performUIUpdatesOnMain {
+                    self.setUIEnabled(true)
+                    self.photoTitleLabel.text = "No photo returned. Try again."
+                    self.photoImageView.image = nil
+                }
+            }
+            
+            
+            guard error == nil else {
+                displayError("There was an error in the request \(error)")
+                return
+            }
+            
+            guard let data = data else {
+                displayError("No data available")
+                return
+            }
+            
+//            check that the status code is 200
+            if let httpResponse = response as? NSHTTPURLResponse {
+                if httpResponse.statusCode == 200 {
+//                    then extract the json data 
+                    let parsedData: AnyObject?
+
+                    do {
+                        parsedData = try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
+                    } catch {
+                        displayError("Could not parse the data")
+                        return
+                    }
+                    
+                    guard let photosDictionary = parsedData!["photos"] as? NSDictionary else {
+                        displayError("No phtotos key on the API response")
+                        return
+                    }
+                    
+                    guard let photosArray = photosDictionary["photo"] as? [[String: AnyObject]] else {
+                        displayError("There is not key 'photo' on the API response")
+                        return
+                    }
+                    
+//                  get the url and the title but first check that the keys exist!
+                    guard let imageUrl = photosArray[0]["url_m"] as? String else {
+                        displayError("There is no image url present")
+                        return
+                    }
+                    
+//                       then turn the image into an NSURL
+                    let imgURL = NSURL(string: imageUrl)
+                    let photoTitle = photosArray[0]["title"] as? String
+                    
+                    if let imageData = NSData(contentsOfURL: imgURL!) {
+                        performUIUpdatesOnMain() {
+                            self.photoImageView.image = UIImage(data: imageData)
+                            self.photoTitleLabel.text = photoTitle
+                            self.setUIEnabled(true)
+                        }
+                    }
+
+                }
+            }
+            
+        }
+        
+        task.resume()
         
         
         
+//        extract the details from the json and then return the data to th view
         
         
         
