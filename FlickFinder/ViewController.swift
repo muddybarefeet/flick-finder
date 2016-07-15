@@ -48,18 +48,24 @@ class ViewController: UIViewController {
     // MARK: Search Actions
     
     @IBAction func searchByPhrase(sender: AnyObject) {
-
+        print("text area triggered")
         userDidTapView(self)
         setUIEnabled(false)
         
         if !phraseTextField.text!.isEmpty {
             photoTitleLabel.text = "Searching..."
-            // TODO: Set necessary parameters!
+
+            var methodParameters: [String: String!] = [:]
             
+            methodParameters = [
+                "safe_search": Constants.FlickrParameterValues.UseSafeSearch,
+                "text": phraseTextField.text,
+                "extras": Constants.FlickrParameterValues.MediumURL,
+                "method": Constants.FlickrParameterValues.SearchMethod,
+                "format": Constants.FlickrParameterValues.SearchMethod,
+                "nojsoncallback": Constants.FlickrParameterValues.DisableJSONCallback
+            ]
             
-            
-            
-            let methodParameters: [String: String!] = [:]
             displayImageFromFlickrBySearch(methodParameters)
         } else {
             setUIEnabled(true)
@@ -75,6 +81,7 @@ class ViewController: UIViewController {
         if isTextFieldValid(latitudeTextField, forRange: Constants.Flickr.SearchLatRange) && isTextFieldValid(longitudeTextField, forRange: Constants.Flickr.SearchLonRange) {
             photoTitleLabel.text = "Searching..."
             // TODO: Set necessary parameters!
+            
             
             
             
