@@ -123,9 +123,9 @@ class ViewController: UIViewController {
     
     // MARK: Flickr API
     
+    
     private func displayImageFromFlickrBySearch(methodParameters: [String:AnyObject]) {
-        
-        print(flickrURLFromParameters(methodParameters))
+    
         
         let session = NSURLSession.sharedSession()
         let request = NSURLRequest(URL: flickrURLFromParameters(methodParameters))
@@ -141,7 +141,6 @@ class ViewController: UIViewController {
                 }
             }
             
-            
             guard error == nil else {
                 displayError("There was an error in the request \(error)")
                 return
@@ -151,7 +150,6 @@ class ViewController: UIViewController {
                 displayError("Your request returned a status code other that a 2xx!")
                 return
             }
-            
             
             guard let data = data else {
                 displayError("No data available")
@@ -168,10 +166,73 @@ class ViewController: UIViewController {
             }
                     
             guard let photosDictionary = parsedData!["photos"] as? NSDictionary else {
-                displayError("No phtotos key on the API response")
+                displayError("No photos key on the API response")
                 return
             }
-                    
+            
+            guard let totalPages = photosDictionary["pages"] as? Int else {
+                print("There is not a key for the number of pages returned")
+                return
+            }
+            
+            let pageLimit = min(totalPages, 40)
+            let randomPageNumber = Int(arc4random_uniform(UInt32(pageLimit))) + 1
+            self.displayImageFromFlickrBySearchSecondTime(methodParameters, withPageNumber: randomPageNumber)
+            
+        }
+        
+        task.resume()
+
+    }
+    
+//    page search
+    private func displayImageFromFlickrBySearchSecondTime(var methodParameters: [String:AnyObject], withPageNumber: Int) {
+        
+        let session = NSURLSession.sharedSession()
+        
+        methodParameters[Constants.FlickrParameterKeys.Page] = "\(withPageNumber)"
+        
+        let request = NSURLRequest(URL: flickrURLFromParameters(methodParameters))
+        
+        let task = session.dataTaskWithRequest(request) { (data, response, error) in
+            
+            func displayError(error: String) {
+                print(error)
+                performUIUpdatesOnMain {
+                    self.setUIEnabled(true)
+                    self.photoTitleLabel.text = "No photo returned. Try again."
+                    self.photoImageView.image = nil
+                }
+            }
+            
+            guard error == nil else {
+                displayError("There was an error in the request \(error)")
+                return
+            }
+            
+            guard let statusCode = (response as? NSHTTPURLResponse)?.statusCode where statusCode >= 200 && statusCode <= 299 else {
+                displayError("Your request returned a status code other that a 2xx!")
+                return
+            }
+            
+            guard let data = data else {
+                displayError("No data available")
+                return
+            }
+            
+            let parsedData: AnyObject?
+            do {
+                parsedData = try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
+            } catch {
+                displayError("Could not parse the data")
+                return
+            }
+            
+            guard let photosDictionary = parsedData!["photos"] as? NSDictionary else {
+                displayError("No photos key on the API response")
+                return
+            }
+            
             guard let photosArray = photosDictionary["photo"] as? [[String: AnyObject]] else {
                 displayError("There is not key 'photo' on the API response")
                 return
@@ -182,7 +243,7 @@ class ViewController: UIViewController {
                 return
             } else {
                 let randomIndex = Int(arc4random_uniform(UInt32(photosArray.count)))
-                let photoDictionary = photosArray[randomIndex] 
+                let photoDictionary = photosArray[randomIndex]
                 let photoTitle = photoDictionary["title"] as? String
                 
                 guard let imageURLString = photoDictionary["url_m"] as? String else {
@@ -194,19 +255,17 @@ class ViewController: UIViewController {
                 if let imageData = NSData(contentsOfURL: imgURL!) {
                     performUIUpdatesOnMain() {
                         self.photoImageView.image = UIImage(data: imageData)
-                        self.photoTitleLabel.text = photoTitle
+                        self.photoTitleLabel.text = photoTitle ?? "(Untitled)"
                         self.setUIEnabled(true)
                     }
                 } else {
                     displayError("Image does not exist")
                 }
-
+                
             }
-            
-        }
-        
-        task.resume()
 
+        }
+        task.resume()
     }
     
     // MARK: Helper for Creating a URL from Parameters
