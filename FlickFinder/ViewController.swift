@@ -84,13 +84,13 @@ class ViewController: UIViewController {
             var methodParameters: [String: String!] = [:]
             
             methodParameters = [
-                "safe_search": Constants.FlickrParameterValues.UseSafeSearch,
-                "extras": Constants.FlickrParameterValues.MediumURL,
-                "api_key": Constants.FlickrParameterValues.APIKey,
-                "method": Constants.FlickrParameterValues.SearchMethod,
-                "format": Constants.FlickrParameterValues.SearchMethod,
-                "nojsoncallback": Constants.FlickrParameterValues.DisableJSONCallback,
-                "bbox": bboxString()
+                Constants.FlickrParameterKeys.Method: Constants.FlickrParameterValues.SearchMethod,
+                Constants.FlickrParameterKeys.APIKey: Constants.FlickrParameterValues.APIKey,
+                Constants.FlickrParameterKeys.SafeSearch: Constants.FlickrParameterValues.UseSafeSearch,
+                Constants.FlickrParameterKeys.Extras: Constants.FlickrParameterValues.MediumURL,
+                Constants.FlickrParameterKeys.Format: Constants.FlickrParameterValues.ResponseFormat,
+                Constants.FlickrParameterKeys.NoJSONCallback: Constants.FlickrParameterValues.DisableJSONCallback,
+                Constants.FlickrParameterKeys.BoundingBox: bboxString()
             ]
             
             
@@ -147,66 +147,66 @@ class ViewController: UIViewController {
                 return
             }
             
+            guard let statusCode = (response as? NSHTTPURLResponse)?.statusCode where statusCode >= 200 && statusCode <= 299 else {
+                displayError("Your request returned a status code other that a 2xx!")
+                return
+            }
+            
+            
             guard let data = data else {
                 displayError("No data available")
                 return
             }
             
-//            check that the status code is 200
-            if let httpResponse = response as? NSHTTPURLResponse {
-                if httpResponse.statusCode == 200 {
-//                    then extract the json data 
-                    let parsedData: AnyObject?
-
-                    do {
-                        parsedData = try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
-                    } catch {
-                        displayError("Could not parse the data")
-                        return
-                    }
+//         then extract the json data
+            let parsedData: AnyObject?
+            do {
+                parsedData = try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
+            } catch {
+                displayError("Could not parse the data")
+                return
+            }
                     
-                    guard let photosDictionary = parsedData!["photos"] as? NSDictionary else {
-                        displayError("No phtotos key on the API response")
-                        return
-                    }
+            guard let photosDictionary = parsedData!["photos"] as? NSDictionary else {
+                displayError("No phtotos key on the API response")
+                return
+            }
                     
-                    guard let photosArray = photosDictionary["photo"] as? [[String: AnyObject]] else {
-                        displayError("There is not key 'photo' on the API response")
-                        return
-                    }
-                    
-//                  get the url and the title but first check that the keys exist!
-                    guard let imageUrl = photosArray[0]["url_m"] as? String else {
-                        displayError("There is no image url present")
-                        return
-                    }
-                    
-//                       then turn the image into an NSURL
-                    let imgURL = NSURL(string: imageUrl)
-                    let photoTitle = photosArray[0]["title"] as? String
-                    
-                    if let imageData = NSData(contentsOfURL: imgURL!) {
-                        performUIUpdatesOnMain() {
-                            self.photoImageView.image = UIImage(data: imageData)
-                            self.photoTitleLabel.text = photoTitle
-                            self.setUIEnabled(true)
-                        }
-                    }
-
+            guard let photosArray = photosDictionary["photo"] as? [[String: AnyObject]] else {
+                displayError("There is not key 'photo' on the API response")
+                return
+            }
+            
+            if photosArray.count == 0 {
+                displayError("No images in the return object")
+                return
+            } else {
+                let randomIndex = Int(arc4random_uniform(UInt32(photosArray.count)))
+                let photoDictionary = photosArray[randomIndex] 
+                let photoTitle = photoDictionary["title"] as? String
+                
+                guard let imageURLString = photoDictionary["url_m"] as? String else {
+                    displayError("There is no image url present")
+                    return
                 }
+                
+                let imgURL = NSURL(string: imageURLString)
+                if let imageData = NSData(contentsOfURL: imgURL!) {
+                    performUIUpdatesOnMain() {
+                        self.photoImageView.image = UIImage(data: imageData)
+                        self.photoTitleLabel.text = photoTitle
+                        self.setUIEnabled(true)
+                    }
+                } else {
+                    displayError("Image does not exist")
+                }
+
             }
             
         }
         
         task.resume()
-        
-        
-        
-//        extract the details from the json and then return the data to th view
-        
-        
-        
-        
+
     }
     
     // MARK: Helper for Creating a URL from Parameters
